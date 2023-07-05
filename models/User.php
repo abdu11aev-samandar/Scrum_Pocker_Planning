@@ -2,167 +2,174 @@
 
 class User extends Validation
 {
-    //DB stuff
+    // DB stuff
     private $conn;
     private $table = 'users';
 
-    //User Properties
+    // User Properties
     public $id;
     public $login;
+    public $email;
     public $password;
     public $confirm_password;
-    public $created_at;
 
-    //Constructor with DB
+    // Constructor with DB
     public function __construct($db)
     {
         $this->conn = $db;
     }
 
-    // Get Posts
+    // Get Users
     public function read()
     {
-        //Create query
+        // Create query
         $query = 'SELECT 
-               p.id,
-               p.login,
-               p.password,
-               p.created_at
-                    FROM
-                ' . $this->table . ' p
-                    ORDER BY
-                p.created_at DESC';
+               id,
+               login,
+               password,
+               email,
+               created_at
+            FROM
+               ' . $this->table . '
+            ORDER BY
+               created_at DESC';
 
-        //Prepare statement
+        // Prepare statement
         $stmt = $this->conn->prepare($query);
 
-        //Execute query
+        // Execute query
         $stmt->execute();
 
         return $stmt;
     }
 
-    //Get Single User
+    // Get Single User
     public function read_single()
     {
-        //Create query
+        // Create query
         $query = 'SELECT 
-               p.id,
-               p.login,
-               p.password,
-               p.created_at
-                    FROM
-                ' . $this->table . ' p
-                    WHERE
-                p.id = ?
-                LIMIT 0,1';
+               id,
+               login,
+               password,
+               email,
+               created_at
+            FROM
+               ' . $this->table . '
+            WHERE
+               id = ?
+            LIMIT 1';
 
-        //Prepare statement
+        // Prepare statement
         $stmt = $this->conn->prepare($query);
 
-        //Bind ID
+        // Bind ID
         $stmt->bindParam(1, $this->id);
 
-        //Execute query
+        // Execute query
         $stmt->execute();
 
         $row = $stmt->fetch(PDO::FETCH_ASSOC);
 
-        //Set properties
+        // Set properties
         $this->login = $row['login'];
         $this->password = $row['password'];
     }
 
-    //Create User
+    // Create User
     public function create()
     {
         $this->login = htmlspecialchars(strip_tags($this->login));
-        $this->password = md5(htmlspecialchars(strip_tags($this->password)));
-        $this->confirm_password = md5(htmlspecialchars(strip_tags($this->confirm_password)));
+        $this->email = htmlspecialchars(strip_tags($this->email));
+        $this->password = htmlspecialchars(strip_tags($this->password));
+        $this->confirm_password = htmlspecialchars(strip_tags($this->confirm_password));
 
-//    parolni tekshirish confirm bilan
-        if ($this->password == $this->confirm_password) {
-            // Login ni tekshirish
-            $existingUser = $this->conn->prepare("SELECT login FROM users WHERE login = ?");
-            $existingUser->execute([$this->login]);
-
-            if ($existingUser->rowCount() > 0) {
-                // Login bazada mavjud
-                return false;
-            } else {
-                // Ma'lumotlarni bazaga yozish
-                try {
-                    $stmt = $this->conn->prepare("INSERT INTO users (login, password) VALUES (?, ?)");
-                    $stmt->execute([$this->login, $this->password]);
-
-                    // Ma'lumotlar muvaffaqiyatli saqlandi
-                    return true;
-                } catch (PDOException $e) {
-                    return false;
-                }
-            }
-        } else {
+        // Password confirmation check
+        if ($this->password !== $this->confirm_password) {
             return false;
         }
 
+        // Check if login already exists
+        $existingUser = $this->conn->prepare("SELECT login FROM users WHERE login = ?");
+        $existingUser->execute([$this->login]);
+
+        if ($existingUser->rowCount() > 0) {
+            // Login already exists in the database
+            return false;
+        }
+
+        // Hash the password
+        $hashed_password = password_hash($this->password, PASSWORD_DEFAULT);
+
+        // Insert data into database
+        try {
+            $stmt = $this->conn->prepare("INSERT INTO users (login, password, email) VALUES (?, ?, ?)");
+            $stmt->execute([$this->login, $hashed_password, $this->email]);
+
+            // Data successfully inserted
+            return true;
+        } catch (PDOException $e) {
+            return false;
+        }
     }
 
-    //Update User
+    // Update User
     public function update()
     {
-        //Create query
+        // Create query
         $query = 'UPDATE ' .
             $this->table . '
-        SET
-            login=:login,
-            password=:password,
-        WHERE
-            id=:id';
+            SET
+            login = :login,
+            password = :password,
+            email = :email
+            WHERE
+            id = :id';
 
-        //Prepare statement
+        // Prepare statement
         $stmt = $this->conn->prepare($query);
 
-        //Clean data
+        // Clean data
         $this->login = htmlspecialchars(strip_tags($this->login));
         $this->password = htmlspecialchars(strip_tags($this->password));
+        $this->email = htmlspecialchars(strip_tags($this->email));
 
-
-        //Bind data
+        // Bind data
         $stmt->bindParam(':id', $this->id);
         $stmt->bindParam(':login', $this->login);
         $stmt->bindParam(':password', $this->password);
+        $stmt->bindParam(':email', $this->email);
 
-        //Execute query
+        // Execute query
         if ($stmt->execute()) {
             return true;
         }
 
-        //Print error if something goes wrong
+        // Print error if something goes wrong
         printf("Error: %s.\n", $stmt->error);
 
         return false;
     }
 
-    //Delete user
+    // Delete user
     public function delete()
     {
-        //Create query
-        $query = 'DELETE FROM ' . $this->table . ' WHERE id=:id';
+        // Create query
+        $query = 'DELETE FROM ' . $this->table . ' WHERE id = :id';
 
-        //Prepare statement
+        // Prepare statement
         $stmt = $this->conn->prepare($query);
 
-        //Clean data
+        // Clean data
         $this->id = htmlspecialchars(strip_tags($this->id));
 
-        //Bind data
+        // Bind data
         $stmt->bindParam(':id', $this->id);
 
         if ($stmt->execute()) {
             return true;
         }
 
-        //Print error if something goes wrong
+        // Print error if something goes wrong
         printf("Error: %s.\n", $stmt->error);
 
         return false;
